@@ -1,10 +1,31 @@
 import { useState, useRef, useEffect } from 'react'
-import { streamFinancialAdvice, getActiveApiKey, saveApiKey, clearApiKey } from '@/lib/gemini'
+import {
+  streamFinancialAdvice,
+  getActiveApiKey,
+  saveApiKey,
+  clearApiKey,
+  getSelectedModel,
+  CANDIDATE_MODELS
+} from '@/lib/gemini'
 import { useFinance } from '@/context/FinanceContext'
 import { useAuth } from '@/context/AuthContext'
 import { formatCurrency } from '@/lib/currency'
-import { BrainCircuit, Send, Loader2, RotateCcw, Sparkles, Key, ExternalLink, CheckCircle, Eye, EyeOff } from 'lucide-react'
+import {
+  BrainCircuit,
+  Send,
+  Loader2,
+  RotateCcw,
+  Sparkles,
+  Key,
+  ExternalLink,
+  CheckCircle,
+  Eye,
+  EyeOff,
+  Zap,
+  ChevronDown
+} from 'lucide-react'
 import toast from 'react-hot-toast'
+import ModelPickerModal from './ModelPickerModal'
 
 const SUGGESTED_PROMPTS = [
   "How can I improve my savings rate?",
@@ -29,8 +50,11 @@ export default function AdvisorSheet() {
   const { metrics, currency } = useFinance()
   const { user, profile, updateProfile } = useAuth()
 
-  // Key state
+  // Key & Model state
   const [activeKey, setActiveKey] = useState(() => getActiveApiKey(user?.id, profile?.gemini_api_key))
+  const [selectedModel, setSelectedModel] = useState(() => getSelectedModel(user?.id))
+  const [showModelPicker, setShowModelPicker] = useState(false)
+
   const [inputKey, setInputKey] = useState('')
   const [showKeyInput, setShowKeyInput] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -39,7 +63,7 @@ export default function AdvisorSheet() {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: "👋 Hi! I'm your **FinCraft AI Advisor** (powered by Gemini 3.8 Flash). I analyze your real-time expenses, debts, bank accounts, and DPS savings to give personalized financial advice.\n\nWhat would you like to review today?",
+      content: "👋 Hi! I'm your **FinCraft AI Advisor**. I analyze your real-time expenses, debts, bank balances, and DPS savings to give personalized advice.\n\nWhat would you like to review today?",
     }
   ])
   const [input, setInput] = useState('')
@@ -50,6 +74,7 @@ export default function AdvisorSheet() {
   useEffect(() => {
     const key = getActiveApiKey(user?.id, profile?.gemini_api_key)
     setActiveKey(key)
+    setSelectedModel(getSelectedModel(user?.id))
   }, [user, profile])
 
   useEffect(() => {
@@ -75,13 +100,15 @@ export default function AdvisorSheet() {
         try {
           await updateProfile({ gemini_api_key: cleanKey })
         } catch (e) {
-          console.warn('Could not sync key to Supabase profile (column may not exist yet), saved locally:', e)
+          console.warn('Could not sync key to Supabase profile:', e)
         }
       }
       setActiveKey(cleanKey)
       setInputKey('')
       setShowKeyInput(false)
-      toast.success('Your Gemini API key is connected! 🤖')
+      toast.success('Google API key connected! Testing models... ⚡')
+      // Prompt user with available models discovery right away
+      setShowModelPicker(true)
     } catch (err) {
       toast.error(err.message || 'Failed to save key')
     } finally {
@@ -99,6 +126,8 @@ export default function AdvisorSheet() {
     setActiveKey(null)
     toast.success('API key removed')
   }
+
+  const currentModelObj = CANDIDATE_MODELS.find(m => m.id === selectedModel) || CANDIDATE_MODELS[0]
 
   const buildContext = () => ({
     monthlyIncome: formatCurrency(metrics.totalIncome, currency),
@@ -131,17 +160,36 @@ export default function AdvisorSheet() {
 
     try {
       let fullText = ''
-      await streamFinancialAdvice(text, buildContext(), (chunk) => {
-        fullText += chunk
-        setMessages(prev => {
-          const updated = [...prev]
-          updated[updated.length - 1] = { role: 'assistant', content: fullText, streaming: true }
-          return updated
-        })
-      }, activeKey)
+      let usedModel = selectedModel
+      const res = await streamFinancialAdvice(
+        text,
+        buildContext(),
+        (chunk, model) => {
+          fullText += chunk
+          if (model) usedModel = model
+          setMessages(prev => {
+            const updated = [...prev]
+            updated[updated.length - 1] = {
+              role: 'assistant',
+              content: fullText,
+              streaming: true,
+              modelUsed: usedModel
+            }
+            return updated
+          })
+        },
+        activeKey,
+        selectedModel
+      )
+
       setMessages(prev => {
         const updated = [...prev]
-        updated[updated.length - 1] = { role: 'assistant', content: fullText, streaming: false }
+        updated[updated.length - 1] = {
+          role: 'assistant',
+          content: fullText,
+          streaming: false,
+          modelUsed: res?.modelUsed || usedModel
+        }
         return updated
       })
     } catch (err) {
@@ -152,8 +200,8 @@ export default function AdvisorSheet() {
         updated[updated.length - 1] = {
           role: 'assistant',
           content: msg.includes('Invalid Gemini API key')
-            ? '⚠️ **Invalid API Key**: Google rejected this API key. Please check your key at [Google AI Studio](https://aistudio.google.com/app/apikey) and reconnect.'
-            : '⚠️ Sorry, I encountered an error connecting to Gemini. Please verify your internet connection or check your API key.',
+            ? '⚠️ **Invalid API Key**: Google rejected this key. Please check your key at [Google AI Studio](https://aistudio.google.com/app/apikey) and reconnect.'
+            : '⚠️ Sorry, Google AI servers are experiencing high load on this model right now. You can switch to another model using the model selector above!',
           streaming: false,
         }
         return updated
@@ -173,7 +221,7 @@ export default function AdvisorSheet() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* AI Status Banner */}
+      {/* AI Status Banner with Model Selector */}
       <div className="mx-4 mb-3 glass-card p-3 bg-brand-600/10 border-brand-500/20">
         <div className="flex items-center gap-2.5 justify-between">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -181,7 +229,21 @@ export default function AdvisorSheet() {
               <BrainCircuit size={16} className="text-white" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-bold text-brand-300 truncate">Gemini 3.8 Flash</p>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => activeKey && setShowModelPicker(true)}
+                  className={`text-xs font-bold text-brand-300 hover:text-white flex items-center gap-1 truncate ${
+                    activeKey ? 'cursor-pointer hover:underline' : ''
+                  }`}
+                  title={activeKey ? "Click to scan and select Gemini model" : ""}
+                >
+                  <span>{currentModelObj.label}</span>
+                  {activeKey && <ChevronDown size={12} className="shrink-0 text-brand-400" />}
+                </button>
+                <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-white/10 text-white/70 hidden sm:inline-block">
+                  {currentModelObj.badge}
+                </span>
+              </div>
               <p className="text-[10px] text-white/50 truncate">
                 {activeKey
                   ? user ? `Connected to ${user.email.split('@')[0]}'s Google Key` : 'Connected to your key'
@@ -192,10 +254,13 @@ export default function AdvisorSheet() {
 
           <div className="flex items-center gap-2 shrink-0">
             {activeKey ? (
-              <div className="flex items-center gap-1.5 bg-success-500/15 text-success-400 px-2 py-0.5 rounded-full text-[10px] font-semibold">
-                <CheckCircle size={10} />
-                <span>Active</span>
-              </div>
+              <button
+                onClick={() => setShowModelPicker(true)}
+                className="flex items-center gap-1 bg-surface-700/80 hover:bg-surface-700 border border-white/10 text-white/80 hover:text-white px-2.5 py-1 rounded-lg text-[10px] font-medium transition-colors"
+              >
+                <Zap size={11} className="text-brand-400" />
+                <span>Change Model</span>
+              </button>
             ) : (
               <button
                 onClick={() => setShowKeyInput(true)}
@@ -210,7 +275,7 @@ export default function AdvisorSheet() {
                 onClick={() => setShowKeyInput(prev => !prev)}
                 className="text-[10px] text-white/40 hover:text-white underline ml-1"
               >
-                {showKeyInput ? 'Close' : 'Manage'}
+                {showKeyInput ? 'Close' : 'Key'}
               </button>
             )}
           </div>
@@ -223,12 +288,12 @@ export default function AdvisorSheet() {
               🔑 {activeKey ? 'Update your Google Gemini API Key' : 'Connect Your Own Google Account (Free)'}
             </p>
             <p className="text-[11px] text-white/50 mb-2 leading-relaxed">
-              To keep each user's financial insights 100% private, every user connects their own free Google Gemini API key:
+              Every user connects their own free Google Gemini key so your financial insights remain 100% private to your Google account.
             </p>
             <ol className="text-[11px] text-white/60 list-decimal list-inside space-y-0.5 mb-2.5">
               <li>Open <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-brand-300 underline font-semibold">aistudio.google.com/app/apikey <ExternalLink size={10} className="inline" /></a> with your Google account.</li>
               <li>Click <strong>"Create API key"</strong> and copy your key.</li>
-              <li>Paste it below and click Connect.</li>
+              <li>Paste it below and click Connect to automatically scan models.</li>
             </ol>
 
             <form onSubmit={handleSaveInlineKey} className="flex gap-2 items-center">
@@ -255,7 +320,7 @@ export default function AdvisorSheet() {
                 disabled={savingKey || !inputKey.trim()}
                 className="btn-primary text-xs py-1.5 px-3 shrink-0"
               >
-                {savingKey ? 'Saving...' : 'Connect AI'}
+                {savingKey ? 'Connecting...' : 'Connect & Scan Models'}
               </button>
               {activeKey && (
                 <button
@@ -293,11 +358,19 @@ export default function AdvisorSheet() {
                 : 'glass-card text-white/85 rounded-tl-sm'
             }`}>
               {msg.content ? (
-                <MarkdownText text={msg.content} />
+                <>
+                  <MarkdownText text={msg.content} />
+                  {msg.modelUsed && (
+                    <div className="mt-2 pt-1 border-t border-white/5 flex items-center gap-1.5 text-[10px] text-white/35">
+                      <Zap size={10} className="text-brand-400" />
+                      <span>Answered by {msg.modelUsed}</span>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="flex items-center gap-2 text-white/50">
                   <Loader2 size={14} className="animate-spin" />
-                  <span className="text-xs">Analyzing your finances with Gemini 3.8...</span>
+                  <span className="text-xs">Analyzing with {currentModelObj.label}...</span>
                 </div>
               )}
               {msg.streaming && msg.content && (
@@ -335,7 +408,7 @@ export default function AdvisorSheet() {
             value={input}
             onChange={e => { setInput(e.target.value); e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px' }}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
-            placeholder={activeKey ? "Ask about your expenses, debts, or savings..." : "Connect your Google Gemini key above to chat..."}
+            placeholder={activeKey ? `Ask about your expenses, debts, or savings (${currentModelObj.label})...` : "Connect your Google Gemini key above to chat..."}
             rows={1}
             className="flex-1 bg-transparent text-white text-sm placeholder-white/30 resize-none
                        focus:outline-none py-1.5 px-2 max-h-24 scrollbar-hide"
@@ -360,6 +433,19 @@ export default function AdvisorSheet() {
           </div>
         </div>
       </div>
+
+      {/* Model Picker Modal */}
+      {showModelPicker && activeKey && (
+        <ModelPickerModal
+          apiKey={activeKey}
+          userId={user?.id}
+          onClose={() => setShowModelPicker(false)}
+          onSelect={(modelId) => {
+            setSelectedModel(modelId)
+            setShowModelPicker(false)
+          }}
+        />
+      )}
     </div>
   )
 }

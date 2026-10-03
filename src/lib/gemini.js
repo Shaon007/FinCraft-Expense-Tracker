@@ -1,15 +1,18 @@
 import { GoogleGenAI } from '@google/genai'
 
 const STORAGE_PREFIX = 'fincraft_gemini_api_key'
+const MODEL_STORAGE_PREFIX = 'fincraft_gemini_model'
+
+export const CANDIDATE_MODELS = [
+  { id: 'gemini-flash-lite-latest', label: 'Gemini Flash-Lite', badge: 'Ultra Fast', desc: 'Fastest latency (<1s), ideal for mobile budgeting' },
+  { id: 'gemini-3.5-flash',          label: 'Gemini 3.5 Flash',  badge: 'Balanced',   desc: 'Great balance of deep insights and fast speed' },
+  { id: 'gemini-3.8-flash',          label: 'Gemini 3.8 Flash',  badge: 'Smartest',   desc: 'Latest high-intelligence reasoning model' },
+  { id: 'gemini-flash-latest',       label: 'Gemini Flash',      badge: 'Stable',     desc: 'Standard auto-updating Flash model' },
+  { id: 'gemini-pro-latest',         label: 'Gemini Pro',        badge: 'Pro Tier',   desc: 'Deep complex analysis (higher quota requirements)' },
+]
 
 /**
  * Get active API key strictly for the current user.
- * Never shares keys between different users.
- * 
- * Priority:
- * 1. Supabase Profile key (synced across user's phone & PC)
- * 2. User-specific localStorage key (fincraft_gemini_api_key_{userId})
- * 3. Guest localStorage key (if not logged in)
  */
 export function getActiveApiKey(userId = null, profileKey = null) {
   try {
@@ -23,7 +26,6 @@ export function getActiveApiKey(userId = null, profileKey = null) {
       const guestKey = localStorage.getItem(`${STORAGE_PREFIX}_guest`)
       if (guestKey && guestKey.trim()) return guestKey.trim()
     }
-    // Also check legacy key if matches current user
     const legacyKey = localStorage.getItem(STORAGE_PREFIX)
     if (legacyKey && legacyKey.trim()) return legacyKey.trim()
   } catch {}
@@ -58,6 +60,31 @@ export function clearApiKey(userId = null) {
   } catch {}
 }
 
+/**
+ * Get selected model for current user
+ */
+export function getSelectedModel(userId = null) {
+  try {
+    const storageKey = userId ? `${MODEL_STORAGE_PREFIX}_${userId}` : MODEL_STORAGE_PREFIX
+    const saved = localStorage.getItem(storageKey)
+    if (saved && saved.trim()) return saved.trim()
+  } catch {}
+  return 'gemini-flash-lite-latest'
+}
+
+/**
+ * Save selected model for current user
+ */
+export function saveSelectedModel(modelId, userId = null) {
+  try {
+    const storageKey = userId ? `${MODEL_STORAGE_PREFIX}_${userId}` : MODEL_STORAGE_PREFIX
+    if (modelId) {
+      localStorage.setItem(storageKey, modelId)
+      localStorage.setItem(MODEL_STORAGE_PREFIX, modelId)
+    }
+  } catch {}
+}
+
 let _ai = null
 let _lastKey = null
 
@@ -70,26 +97,62 @@ function getClient(apiKey) {
   return _ai
 }
 
-const SYSTEM_PROMPT = `You are FinCraft AI, an intelligent and friendly personal financial advisor.
-You provide concise, actionable advice tailored to the user's financial situation.
-Always be encouraging, specific, and data-driven. Format responses with:
+/**
+ * Discover available models for a given Google API key
+ * Pings candidates in parallel to detect live status and latency
+ */
+export async function discoverAvailableModels(apiKey) {
+  const client = getClient(apiKey)
+  if (!client) return []
+
+  const testList = CANDIDATE_MODELS.map(c => c.id)
+
+  const results = await Promise.all(
+    CANDIDATE_MODELS.map(async (item) => {
+      const start = Date.now()
+      try {
+        await Promise.race([
+          client.models.generateContent({ model: item.id, contents: 'ping' }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3500))
+        ])
+        return {
+          ...item,
+          status: 'online',
+          latencyMs: Date.now() - start,
+        }
+      } catch (err) {
+        const msg = err?.message || ''
+        let reason = 'Busy'
+        if (msg.includes('429') || msg.includes('quota')) reason = 'Quota Limit'
+        else if (msg.includes('404')) reason = 'Not Supported'
+        else if (msg.includes('Timeout')) reason = 'Slow / Busy'
+        return {
+          ...item,
+          status: 'unavailable',
+          error: reason,
+        }
+      }
+    })
+  )
+
+  return results
+}
+
+const SYSTEM_PROMPT = `You are FinCraft AI, an intelligent, concise personal financial advisor.
+You provide clear, actionable advice tailored to the user's financial situation.
+Format responses with:
 - Short bold headers using **text**
 - Bullet points for lists
 - Concrete numbers when possible
-- Keep responses under 300 words unless asked for detail
-Never be alarmist but do flag genuine risks clearly.`
-
-// Gemini 3.8 Flash is the active current generation model for Google GenAI in 2026
-const PRIMARY_MODELS = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-flash-latest']
+- Keep responses under 250 words unless asked for detail
+Never be alarmist, keep insights encouraging and practical.`
 
 /**
- * Stream AI financial advice from Gemini using the user's own API key
+ * Stream AI advice with automatic fallback to next available model if selected model is busy
  */
-export async function streamFinancialAdvice(prompt, financialContext, onChunk, apiKey) {
+export async function streamFinancialAdvice(prompt, financialContext, onChunk, apiKey, preferredModel = null) {
   const client = getClient(apiKey)
-  if (!client) {
-    throw new Error('NO_API_KEY')
-  }
+  if (!client) throw new Error('NO_API_KEY')
 
   const contextSummary = financialContext
     ? `\n\nUser's Financial Snapshot:\n${JSON.stringify(financialContext, null, 2)}`
@@ -97,9 +160,15 @@ export async function streamFinancialAdvice(prompt, financialContext, onChunk, a
 
   const fullPrompt = `${SYSTEM_PROMPT}${contextSummary}\n\nUser: ${prompt}`
 
+  const primary = preferredModel || 'gemini-flash-lite-latest'
+  const fallbackChain = [
+    primary,
+    ...CANDIDATE_MODELS.map(c => c.id).filter(id => id !== primary)
+  ]
+
   let lastError = null
 
-  for (const model of PRIMARY_MODELS) {
+  for (const model of fallbackChain) {
     try {
       const response = await client.models.generateContentStream({
         model,
@@ -110,31 +179,29 @@ export async function streamFinancialAdvice(prompt, financialContext, onChunk, a
         const chunkText = typeof chunk.text === 'function' ? chunk.text() : (chunk.text || '')
         if (chunkText) {
           fullText += chunkText
-          onChunk?.(chunkText)
+          onChunk?.(chunkText, model)
         }
       }
-      if (fullText) return fullText
+      if (fullText) return { text: fullText, modelUsed: model }
     } catch (error) {
-      console.warn(`Model ${model} stream attempt failed:`, error?.message || error)
+      console.warn(`Model ${model} stream attempt failed, attempting fallback:`, error?.message)
       lastError = error
       if (
         error?.message?.includes('API_KEY_INVALID') ||
-        error?.message?.includes('API key') ||
-        error?.status === 400 ||
-        error?.status === 403
+        error?.message?.includes('API key not valid')
       ) {
-        throw new Error('Invalid Gemini API key. Please check your key in Settings.')
+        throw new Error('Invalid Gemini API key. Please check your key at Google AI Studio.')
       }
     }
   }
 
-  throw new Error(lastError?.message || 'AI advisor temporarily unavailable. Please try again.')
+  throw new Error(lastError?.message || 'Google AI servers are currently busy. Please try again in a moment.')
 }
 
 /**
- * Analyze spending patterns and return risk alerts using user's key
+ * Analyze spending risks with fallback
  */
-export async function analyzeSpendingRisks(financialData, apiKey) {
+export async function analyzeSpendingRisks(financialData, apiKey, preferredModel = null) {
   const client = getClient(apiKey)
   if (!client) return null
 
@@ -152,7 +219,13 @@ Return ONLY valid JSON in this exact format:
   "topInsight": string
 }`
 
-  for (const model of PRIMARY_MODELS) {
+  const primary = preferredModel || 'gemini-flash-lite-latest'
+  const fallbackChain = [
+    primary,
+    ...CANDIDATE_MODELS.map(c => c.id).filter(id => id !== primary)
+  ]
+
+  for (const model of fallbackChain) {
     try {
       const response = await client.models.generateContent({
         model,
@@ -162,7 +235,7 @@ Return ONLY valid JSON in this exact format:
       const jsonMatch = text.match(/\{[\s\S]*\}/)
       if (jsonMatch) return JSON.parse(jsonMatch[0])
     } catch (error) {
-      console.warn(`Model ${model} risk analysis failed:`, error?.message)
+      console.warn(`Model ${model} risk analysis attempt failed:`, error?.message)
     }
   }
 

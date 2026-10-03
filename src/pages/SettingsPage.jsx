@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { useFinance } from '@/context/FinanceContext'
 import { CURRENCIES } from '@/lib/currency'
-import { getActiveApiKey, saveApiKey, clearApiKey } from '@/lib/gemini'
+import { getActiveApiKey, saveApiKey, clearApiKey, getSelectedModel, CANDIDATE_MODELS } from '@/lib/gemini'
 import {
   LogOut, Globe, ChevronRight, Shield, Bell, Star, Info,
-  BrainCircuit, Key, Eye, EyeOff, CheckCircle, XCircle, ExternalLink, User, Palette
+  BrainCircuit, Key, Eye, EyeOff, CheckCircle, XCircle, ExternalLink, User, Palette, Zap
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Header from '@/components/common/Header'
+import ModelPickerModal from '@/components/ai/ModelPickerModal'
 
 function SectionTitle({ children }) {
   return <p className="label-text px-1 mt-5 mb-2">{children}</p>
@@ -20,15 +21,18 @@ export default function SettingsPage() {
   const [updating, setUpdating] = useState(false)
   const [selectedCurrency, setSelectedCurrency] = useState(profile?.currency || 'USD')
 
-  // Gemini API key state
+  // Gemini API key state & model state
   const [geminiKey, setGeminiKey] = useState('')
   const [showKey, setShowKey] = useState(false)
   const [keySaved, setKeySaved] = useState(false)
+  const [selectedModel, setSelectedModel] = useState(() => getSelectedModel(user?.id))
+  const [showModelPicker, setShowModelPicker] = useState(false)
 
   useEffect(() => {
     const key = getActiveApiKey(user?.id, profile?.gemini_api_key)
     if (key) { setGeminiKey(key); setKeySaved(true) }
     else { setGeminiKey(''); setKeySaved(false) }
+    setSelectedModel(getSelectedModel(user?.id))
   }, [user, profile])
 
   const handleSignOut = async () => {
@@ -59,7 +63,8 @@ export default function SettingsPage() {
       }
     }
     setKeySaved(true)
-    toast.success('Gemini API key saved! 🤖 Connected strictly to your account.')
+    toast.success('Gemini API key saved! 🤖 Testing available models...')
+    setShowModelPicker(true)
   }
 
   const handleClearGeminiKey = async () => {
@@ -202,7 +207,7 @@ export default function SettingsPage() {
                 }`}
               >
                 <Key size={14} />
-                {keySaved ? 'Key Saved ✓' : 'Save API Key'}
+                {keySaved ? 'Key Saved ✓' : 'Save & Check Models'}
               </button>
               {keySaved && (
                 <button
@@ -213,8 +218,41 @@ export default function SettingsPage() {
                 </button>
               )}
             </div>
+
+            {/* Model Selection Row */}
+            {keySaved && (
+              <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs text-white/50">Active Model</p>
+                  <p className="text-sm font-bold text-white flex items-center gap-1.5 truncate">
+                    <Zap size={14} className="text-brand-400 shrink-0" />
+                    <span>{CANDIDATE_MODELS.find(m => m.id === selectedModel)?.label || selectedModel}</span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowModelPicker(true)}
+                  className="px-3 py-1.5 rounded-lg bg-brand-500/15 text-brand-300 hover:bg-brand-500/25 border border-brand-500/30 text-xs font-semibold shrink-0 transition-colors"
+                >
+                  Scan & Switch Model ⚡
+                </button>
+              </div>
+            )}
           </div>
         </div>
+
+        {/* Model Picker Modal */}
+        {showModelPicker && geminiKey && (
+          <ModelPickerModal
+            apiKey={geminiKey}
+            userId={user?.id}
+            onClose={() => setShowModelPicker(false)}
+            onSelect={(modelId) => {
+              setSelectedModel(modelId)
+              setShowModelPicker(false)
+            }}
+          />
+        )}
 
         {/* ─── CURRENCY ─── */}
         <SectionTitle>💱 Default Currency</SectionTitle>
