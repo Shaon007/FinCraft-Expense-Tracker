@@ -26,10 +26,10 @@ export default function SettingsPage() {
   const [keySaved, setKeySaved] = useState(false)
 
   useEffect(() => {
-    const key = getActiveApiKey(user?.id)
+    const key = getActiveApiKey(user?.id, profile?.gemini_api_key)
     if (key) { setGeminiKey(key); setKeySaved(true) }
     else { setGeminiKey(''); setKeySaved(false) }
-  }, [user])
+  }, [user, profile])
 
   const handleSignOut = async () => {
     await signOut()
@@ -46,19 +46,32 @@ export default function SettingsPage() {
     }
   }
 
-  const handleSaveGeminiKey = () => {
+  const handleSaveGeminiKey = async () => {
     if (!geminiKey.trim()) { toast.error('Please enter an API key'); return }
-    if (!geminiKey.startsWith('AIza')) { toast.error('This doesn\'t look like a valid Gemini API key (should start with AIza...)'); return }
-    saveApiKey(geminiKey.trim(), user?.id)
+    if (!geminiKey.startsWith('AIza')) { toast.error('Invalid key. Google AI Studio keys start with AIzaSy...'); return }
+    const cleanKey = geminiKey.trim()
+    saveApiKey(cleanKey, user?.id)
+    if (user && updateProfile) {
+      try {
+        await updateProfile({ gemini_api_key: cleanKey })
+      } catch (e) {
+        console.warn('Profile sync fallback:', e)
+      }
+    }
     setKeySaved(true)
-    toast.success('Gemini API key saved! 🤖 AI Advisor is now active for your account.')
+    toast.success('Gemini API key saved! 🤖 Connected strictly to your account.')
   }
 
-  const handleClearGeminiKey = () => {
+  const handleClearGeminiKey = async () => {
     clearApiKey(user?.id)
+    if (user && updateProfile) {
+      try {
+        await updateProfile({ gemini_api_key: null })
+      } catch {}
+    }
     setGeminiKey('')
     setKeySaved(false)
-    toast.success('API key removed')
+    toast.success('API key removed from your account')
   }
 
   const displayName = profile?.display_name || user?.email?.split('@')[0] || 'Guest'
@@ -126,24 +139,24 @@ export default function SettingsPage() {
               <BrainCircuit size={17} className="text-white" />
             </div>
             <div className="flex-1">
-              <p className="text-sm font-semibold text-white">Gemini 2.5 Flash</p>
-              <p className="text-xs text-white/40">Powers your AI Financial Advisor</p>
+              <p className="text-sm font-semibold text-white">Gemini 3.8 Flash</p>
+              <p className="text-xs text-white/40">Personalized AI Financial Advisor</p>
             </div>
             <div className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
               keySaved ? 'bg-success-500/15 text-success-400' : 'bg-warning-500/15 text-warning-400'
             }`}>
               {keySaved ? <CheckCircle size={11} /> : <XCircle size={11} />}
-              {keySaved ? 'Connected' : 'Not Set'}
+              {keySaved ? 'Connected (Your Account)' : 'Not Set'}
             </div>
           </div>
 
           {/* Info box */}
           <div className="px-4 py-3.5 bg-brand-600/10 border-b border-white/5 space-y-2">
             <p className="text-xs text-white/70 leading-relaxed">
-              💡 <strong>Have Gemini Pro in your Gmail?</strong> Consumer subscriptions (like Google One / Gemini Advanced) don't automatically connect to third-party web apps. You just need to generate a <strong className="text-brand-300">free API key</strong> using that same Gmail account!
+              💡 <strong>Each user connects their own Google API Key:</strong> Your key is strictly linked to your account. Other users who log in will connect their own key, so nobody uses your quota or sees your financial conversations.
             </p>
             <p className="text-[11px] text-white/50 leading-relaxed">
-              1. Click the link below to open Google AI Studio.<br/>
+              1. Open Google AI Studio using your Google/Gmail account.<br/>
               2. Click <strong>"Create API key"</strong>.<br/>
               3. Copy the key (starts with <code className="text-brand-300">AIzaSy...</code>) and paste it below.
             </p>
@@ -154,7 +167,7 @@ export default function SettingsPage() {
               className="inline-flex items-center gap-1.5 pt-1 text-xs text-brand-300 font-bold hover:text-brand-200 transition-colors"
             >
               <ExternalLink size={12} />
-              Open Google AI Studio → Get Your API Key (Free)
+              Open Google AI Studio → Get Your Free API Key
             </a>
           </div>
 

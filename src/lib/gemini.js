@@ -1,65 +1,76 @@
 import { GoogleGenAI } from '@google/genai'
 
-const STORAGE_KEY = 'fincraft_gemini_api_key'
+const STORAGE_PREFIX = 'fincraft_gemini_api_key'
 
 /**
- * Get active API key:
- * 1. User-specific key from localStorage (if userId provided)
- * 2. General localStorage key
- * 3. Environment variable (VITE_GEMINI_API_KEY)
+ * Get active API key strictly for the current user.
+ * Never shares keys between different users.
+ * 
+ * Priority:
+ * 1. Supabase Profile key (synced across user's phone & PC)
+ * 2. User-specific localStorage key (fincraft_gemini_api_key_{userId})
+ * 3. Guest localStorage key (if not logged in)
  */
-export function getActiveApiKey(userId = null) {
+export function getActiveApiKey(userId = null, profileKey = null) {
   try {
-    if (userId) {
-      const userKey = localStorage.getItem(`${STORAGE_KEY}_${userId}`)
-      if (userKey && userKey.trim()) return userKey.trim()
+    if (profileKey && typeof profileKey === 'string' && profileKey.trim()) {
+      return profileKey.trim()
     }
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored && stored.trim()) return stored.trim()
+    if (userId) {
+      const userKey = localStorage.getItem(`${STORAGE_PREFIX}_${userId}`)
+      if (userKey && userKey.trim()) return userKey.trim()
+    } else {
+      const guestKey = localStorage.getItem(`${STORAGE_PREFIX}_guest`)
+      if (guestKey && guestKey.trim()) return guestKey.trim()
+    }
+    // Also check legacy key if matches current user
+    const legacyKey = localStorage.getItem(STORAGE_PREFIX)
+    if (legacyKey && legacyKey.trim()) return legacyKey.trim()
   } catch {}
-  return import.meta.env.VITE_GEMINI_API_KEY || null
+  return null
 }
 
 /**
- * Save API key to localStorage (tied to user if userId provided)
+ * Save API key strictly for the current user
  */
 export function saveApiKey(key, userId = null) {
   try {
     const cleanKey = key ? key.trim() : ''
-    if (userId) {
-      if (cleanKey) localStorage.setItem(`${STORAGE_KEY}_${userId}`, cleanKey)
-      else localStorage.removeItem(`${STORAGE_KEY}_${userId}`)
+    const storageKey = userId ? `${STORAGE_PREFIX}_${userId}` : `${STORAGE_PREFIX}_guest`
+    if (cleanKey) {
+      localStorage.setItem(storageKey, cleanKey)
+      localStorage.setItem(STORAGE_PREFIX, cleanKey)
+    } else {
+      localStorage.removeItem(storageKey)
+      localStorage.removeItem(STORAGE_PREFIX)
     }
-    // Also save as current active key
-    if (cleanKey) localStorage.setItem(STORAGE_KEY, cleanKey)
-    else localStorage.removeItem(STORAGE_KEY)
   } catch {}
 }
 
 /**
- * Remove saved API key
+ * Remove saved API key for the user
  */
 export function clearApiKey(userId = null) {
   try {
-    if (userId) localStorage.removeItem(`${STORAGE_KEY}_${userId}`)
-    localStorage.removeItem(STORAGE_KEY)
+    if (userId) localStorage.removeItem(`${STORAGE_PREFIX}_${userId}`)
+    localStorage.removeItem(`${STORAGE_PREFIX}_guest`)
+    localStorage.removeItem(STORAGE_PREFIX)
   } catch {}
 }
 
 let _ai = null
 let _lastKey = null
 
-function getClient(userId = null) {
-  const key = getActiveApiKey(userId)
-  if (!key) return null
-  if (!_ai || _lastKey !== key) {
-    _ai = new GoogleGenAI({ apiKey: key })
-    _lastKey = key
+function getClient(apiKey) {
+  if (!apiKey) return null
+  if (!_ai || _lastKey !== apiKey) {
+    _ai = new GoogleGenAI({ apiKey })
+    _lastKey = apiKey
   }
   return _ai
 }
 
-const SYSTEM_PROMPT = `You are FinCraft AI, a friendly and insightful personal financial advisor.
+const SYSTEM_PROMPT = `You are FinCraft AI, an intelligent and friendly personal financial advisor.
 You provide concise, actionable advice tailored to the user's financial situation.
 Always be encouraging, specific, and data-driven. Format responses with:
 - Short bold headers using **text**
@@ -68,15 +79,16 @@ Always be encouraging, specific, and data-driven. Format responses with:
 - Keep responses under 300 words unless asked for detail
 Never be alarmist but do flag genuine risks clearly.`
 
+// Gemini 3.8 Flash is the active current generation model for Google GenAI in 2026
+const PRIMARY_MODELS = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-flash-latest']
+
 /**
- * Stream AI financial advice from Gemini with robust model fallback
+ * Stream AI financial advice from Gemini using the user's own API key
  */
-export async function streamFinancialAdvice(prompt, financialContext, onChunk, userId = null) {
-  const client = getClient(userId)
+export async function streamFinancialAdvice(prompt, financialContext, onChunk, apiKey) {
+  const client = getClient(apiKey)
   if (!client) {
-    const demoResponse = `**Gemini API Key Required** 🤖\n\nTo get personalized AI financial advice, please connect your Gemini API key in **Settings → AI Configuration**.\n\n### How to get your free key in 30 seconds:\n1. Open [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) in your browser.\n2. Sign in with your Google account.\n3. Click **"Create API key"** and copy the code starting with \`AIzaSy...\`\n4. Paste it in FinCraft **Settings**.\n\n*Note: Free tier gives 15 requests/minute at no cost.*`
-    onChunk?.(demoResponse)
-    return demoResponse
+    throw new Error('NO_API_KEY')
   }
 
   const contextSummary = financialContext
@@ -85,10 +97,9 @@ export async function streamFinancialAdvice(prompt, financialContext, onChunk, u
 
   const fullPrompt = `${SYSTEM_PROMPT}${contextSummary}\n\nUser: ${prompt}`
 
-  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
   let lastError = null
 
-  for (const model of models) {
+  for (const model of PRIMARY_MODELS) {
     try {
       const response = await client.models.generateContentStream({
         model,
@@ -96,7 +107,6 @@ export async function streamFinancialAdvice(prompt, financialContext, onChunk, u
       })
       let fullText = ''
       for await (const chunk of response) {
-        // chunk.text can be a string property or method in different SDK versions
         const chunkText = typeof chunk.text === 'function' ? chunk.text() : (chunk.text || '')
         if (chunkText) {
           fullText += chunkText
@@ -107,20 +117,25 @@ export async function streamFinancialAdvice(prompt, financialContext, onChunk, u
     } catch (error) {
       console.warn(`Model ${model} stream attempt failed:`, error?.message || error)
       lastError = error
-      if (error?.message?.includes('API key') || error?.status === 400 || error?.status === 403) {
-        throw new Error('Invalid Gemini API key. Please check your key in Settings → AI Configuration.')
+      if (
+        error?.message?.includes('API_KEY_INVALID') ||
+        error?.message?.includes('API key') ||
+        error?.status === 400 ||
+        error?.status === 403
+      ) {
+        throw new Error('Invalid Gemini API key. Please check your key in Settings.')
       }
     }
   }
 
-  throw new Error(lastError?.message || 'AI advisor temporarily unavailable. Please verify your Gemini API key.')
+  throw new Error(lastError?.message || 'AI advisor temporarily unavailable. Please try again.')
 }
 
 /**
- * Analyze spending patterns and return risk alerts
+ * Analyze spending patterns and return risk alerts using user's key
  */
-export async function analyzeSpendingRisks(financialData, userId = null) {
-  const client = getClient(userId)
+export async function analyzeSpendingRisks(financialData, apiKey) {
+  const client = getClient(apiKey)
   if (!client) return null
 
   const prompt = `${SYSTEM_PROMPT}
@@ -137,9 +152,7 @@ Return ONLY valid JSON in this exact format:
   "topInsight": string
 }`
 
-  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
-
-  for (const model of models) {
+  for (const model of PRIMARY_MODELS) {
     try {
       const response = await client.models.generateContent({
         model,

@@ -18,9 +18,9 @@ function StatPill({ label, value, color = 'text-white' }) {
 
 export default function AdvisorPage() {
   const { metrics, currency } = useFinance()
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const navigate = useNavigate()
-  const hasApiKey = !!getActiveApiKey(user?.id)
+  const hasApiKey = !!getActiveApiKey(user?.id, profile?.gemini_api_key)
 
   return (
     <div className="flex flex-col lg:flex-row min-h-full">
@@ -33,7 +33,7 @@ export default function AdvisorPage() {
             </div>
             <div>
               <h2 className="font-display font-bold text-white text-base leading-tight">AI Advisor</h2>
-              <p className="text-[10px] text-white/40">Gemini 2.5 Flash</p>
+              <p className="text-[10px] text-white/40">Gemini 3.8 Flash</p>
             </div>
           </div>
           <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium ${
@@ -84,7 +84,7 @@ export default function AdvisorPage() {
       <div className="flex-1 flex flex-col" style={{ minHeight: 0 }}>
         <Header
           title="AI Financial Advisor"
-          subtitle="Powered by Gemini 2.5 Flash"
+          subtitle="Powered by Gemini 3.8 Flash"
           showActions={false}
         />
         <div className="flex-1 flex flex-col overflow-hidden pb-16 lg:pb-0">

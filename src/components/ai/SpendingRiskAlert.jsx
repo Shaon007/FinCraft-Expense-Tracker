@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { analyzeSpendingRisks } from '@/lib/gemini'
+import { analyzeSpendingRisks, getActiveApiKey } from '@/lib/gemini'
 import { useFinance } from '@/context/FinanceContext'
 import { useAuth } from '@/context/AuthContext'
 import { formatCurrency } from '@/lib/currency'
@@ -19,13 +19,16 @@ const RISK_LABEL = {
 
 export default function SpendingRiskAlert() {
   const { metrics, currency } = useFinance()
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [analysis, setAnalysis] = useState(null)
   const [loading, setLoading] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [ran, setRan] = useState(false)
 
   const runAnalysis = async () => {
+    const apiKey = getActiveApiKey(user?.id, profile?.gemini_api_key)
+    if (!apiKey) return // Only run if user has configured their personal key
+
     setLoading(true)
     try {
       const data = {
@@ -35,7 +38,7 @@ export default function SpendingRiskAlert() {
         savingsRate: metrics.savingsRate,
         topCategories: metrics.categoryBreakdown.slice(0, 5).map(c => ({ name: c.name, amount: c.spent })),
       }
-      const result = await analyzeSpendingRisks(data, user?.id)
+      const result = await analyzeSpendingRisks(data, apiKey)
       setAnalysis(result)
       setRan(true)
     } catch (err) {
