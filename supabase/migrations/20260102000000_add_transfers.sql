@@ -9,7 +9,7 @@ create table if not exists public.account_transfers (
   amount          numeric(12,2) not null check (amount > 0),
   note            text,
   date            date not null default current_date,
-  currency        text not null default 'USD',
+  currency        text not null default 'BDT',
   created_at      timestamptz not null default now()
 );
 

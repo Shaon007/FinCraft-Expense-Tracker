@@ -5,7 +5,7 @@ const NAV_ITEMS = [
   { to: '/',          icon: LayoutDashboard, label: 'Home'      },
   { to: '/expenses',  icon: CreditCard,      label: 'Expenses'  },
   { to: '/transfers', icon: ArrowRightLeft,  label: 'Transfer'  },
-  { to: '/deposits',  icon: Landmark,        label: 'Savings'   },
+  { to: '/deposits',  icon: Landmark,        label: 'Accounts'  },
   { to: '/advisor',   icon: BrainCircuit,    label: 'AI'        },
 ]
 

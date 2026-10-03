@@ -45,13 +45,13 @@ export default function CurrencyTicker() {
   const doubled = [...rates, ...rates]
 
   return (
-    <div className="glass-card overflow-hidden mb-4">
-      <div className="flex items-center">
+    <div className="glass-card overflow-hidden mb-4 w-full max-w-full">
+      <div className="flex items-center w-full max-w-full min-w-0">
         <div className="bg-brand-gradient px-3 py-2 shrink-0">
           <span className="text-[10px] font-bold text-white uppercase tracking-widest">Live</span>
         </div>
-        <div className="overflow-hidden flex-1">
-          <div className="flex animate-ticker" style={{ width: 'max-content' }}>
+        <div className="overflow-hidden flex-1 min-w-0 w-0">
+          <div className="flex animate-ticker pointer-events-none select-none" style={{ width: 'max-content' }}>
             {doubled.map((item, i) => (
               <TickerItem key={i} {...item} />
             ))}

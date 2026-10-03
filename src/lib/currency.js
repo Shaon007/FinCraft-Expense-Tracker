@@ -20,7 +20,7 @@ export const CURRENCIES = [
 /**
  * Format a number as currency
  */
-export function formatCurrency(amount, currencyCode = 'USD', compact = false) {
+export function formatCurrency(amount, currencyCode = 'BDT', compact = false) {
   if (amount === null || amount === undefined) return '—'
   const currency = CURRENCIES.find(c => c.code === currencyCode) || CURRENCIES[0]
   const num = Number(amount)

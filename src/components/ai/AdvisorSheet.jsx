@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { streamFinancialAdvice } from '@/lib/gemini'
 import { useFinance } from '@/context/FinanceContext'
+import { useAuth } from '@/context/AuthContext'
 import { formatCurrency } from '@/lib/currency'
 import { BrainCircuit, Send, Loader2, RotateCcw, Sparkles, ChevronDown } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -26,6 +27,7 @@ function MarkdownText({ text }) {
 
 export default function AdvisorSheet() {
   const { metrics, currency } = useFinance()
+  const { user } = useAuth()
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
@@ -73,7 +75,7 @@ export default function AdvisorSheet() {
           updated[updated.length - 1] = { role: 'assistant', content: fullText, streaming: true }
           return updated
         })
-      })
+      }, user?.id)
       setMessages(prev => {
         const updated = [...prev]
         updated[updated.length - 1] = { role: 'assistant', content: fullText, streaming: false }

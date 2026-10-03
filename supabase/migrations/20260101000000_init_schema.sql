@@ -11,7 +11,7 @@ create table if not exists public.profiles (
   id           uuid primary key references auth.users(id) on delete cascade,
   display_name text,
   avatar_url   text,
-  currency     text not null default 'USD',
+  currency     text not null default 'BDT',
   monthly_budget numeric(12,2) default 0,
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now()
@@ -64,7 +64,7 @@ create table if not exists public.transactions (
   description text,
   note        text,
   date        date not null default current_date,
-  currency    text not null default 'USD',
+  currency    text not null default 'BDT',
   tags        text[] default '{}',
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
@@ -89,7 +89,7 @@ create table if not exists public.debts (
   interest_rate  numeric(5,2) default 0,
   due_date       date,
   status         text not null default 'active' check (status in ('active', 'paid', 'overdue')),
-  currency       text not null default 'USD',
+  currency       text not null default 'BDT',
   notes          text,
   created_at     timestamptz not null default now(),
   updated_at     timestamptz not null default now()
@@ -111,7 +111,7 @@ create table if not exists public.deposits (
   interest_rate  numeric(5,2) default 0,
   account_number text,
   maturity_date  date,
-  currency       text not null default 'USD',
+  currency       text not null default 'BDT',
   notes          text,
   is_primary     boolean default false,
   created_at     timestamptz not null default now(),

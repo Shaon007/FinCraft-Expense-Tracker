@@ -22,16 +22,16 @@ function AppLayout() {
   const hideNav = HIDE_NAV_PATHS.includes(location.pathname)
 
   return (
-    <div className="flex min-h-dvh bg-surface-900">
+    <div className="flex min-h-dvh bg-surface-900 w-full max-w-full overflow-x-hidden">
       {/* ─── Desktop Sidebar ───────────────────────────────── */}
       {!hideNav && (
-        <div className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:w-64 xl:w-72">
+        <div className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:w-64 xl:w-72 shrink-0">
           <Sidebar />
         </div>
       )}
 
       {/* ─── Main content area ─────────────────────────────── */}
-      <div className={`flex-1 flex flex-col min-h-dvh ${!hideNav ? 'lg:pl-64 xl:pl-72' : ''}`}>
+      <div className={`flex-1 flex flex-col min-h-dvh w-full min-w-0 max-w-full overflow-x-hidden ${!hideNav ? 'lg:pl-64 xl:pl-72' : ''}`}>
         <Routes>
           <Route path="/auth"      element={<AuthPage />} />
           <Route path="/settings"  element={<SettingsPage />} />

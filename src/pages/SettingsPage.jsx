@@ -26,13 +26,14 @@ export default function SettingsPage() {
   const [keySaved, setKeySaved] = useState(false)
 
   useEffect(() => {
-    const key = getActiveApiKey()
+    const key = getActiveApiKey(user?.id)
     if (key) { setGeminiKey(key); setKeySaved(true) }
-  }, [])
+    else { setGeminiKey(''); setKeySaved(false) }
+  }, [user])
 
   const handleSignOut = async () => {
     await signOut()
-    toast.success('Signed out')
+    toast.success('Signed out. You can now log into another account.')
   }
 
   const handleCurrencyChange = async (code) => {
@@ -47,14 +48,14 @@ export default function SettingsPage() {
 
   const handleSaveGeminiKey = () => {
     if (!geminiKey.trim()) { toast.error('Please enter an API key'); return }
-    if (!geminiKey.startsWith('AIza')) { toast.error('This doesn\'t look like a valid Gemini API key'); return }
-    saveApiKey(geminiKey.trim())
+    if (!geminiKey.startsWith('AIza')) { toast.error('This doesn\'t look like a valid Gemini API key (should start with AIza...)'); return }
+    saveApiKey(geminiKey.trim(), user?.id)
     setKeySaved(true)
-    toast.success('Gemini API key saved! 🤖 AI Advisor is now active.')
+    toast.success('Gemini API key saved! 🤖 AI Advisor is now active for your account.')
   }
 
   const handleClearGeminiKey = () => {
-    clearApiKey()
+    clearApiKey(user?.id)
     setGeminiKey('')
     setKeySaved(false)
     toast.success('API key removed')
@@ -67,19 +68,53 @@ export default function SettingsPage() {
       <Header title="Settings" subtitle="Preferences & configuration" />
 
       <div className="page-container lg:max-w-2xl pt-4">
-        {/* Profile Card */}
-        <div className="glass-card p-5 flex items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-brand-gradient flex items-center justify-center text-2xl font-black text-white shadow-glow shrink-0">
-            {displayName[0].toUpperCase()}
+        {/* Profile & Multi-User Card */}
+        <div className="glass-card p-5 mb-4">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-brand-gradient flex items-center justify-center text-2xl font-black text-white shadow-glow shrink-0">
+              {displayName[0].toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-white text-lg truncate">{displayName}</p>
+              <p className="text-xs text-white/50 truncate">{user?.email || 'Demo mode (Not signed in)'}</p>
+              <div className="flex items-center gap-2 mt-1">
+                {user ? (
+                  <span className="badge badge-success text-[10px]">Private Account Active</span>
+                ) : (
+                  <span className="badge badge-warning text-[10px]">Shared Demo Mode</span>
+                )}
+              </div>
+            </div>
+            {!user ? (
+              <a href="/auth" className="btn-primary text-xs px-4 py-2 shrink-0">Sign In / Register</a>
+            ) : (
+              <button
+                onClick={handleSignOut}
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-surface-700 text-white/70 hover:text-white border border-white/10 shrink-0"
+              >
+                Switch Account
+              </button>
+            )}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-bold text-white text-lg truncate">{displayName}</p>
-            <p className="text-xs text-white/40 truncate">{user?.email || 'Demo mode – not signed in'}</p>
-            {isDemoMode && <span className="badge badge-warning mt-1">Demo Mode</span>}
+
+          {/* Multi-user guidance */}
+          <div className="mt-4 pt-3 border-t border-white/5">
+            {user ? (
+              <p className="text-[11px] text-white/50 leading-relaxed">
+                🔒 <strong>Separate Accounts:</strong> All your transactions, debts, bank balances, and DPS plans are stored in your private Supabase profile. When someone else signs in with their email, they will have their own independent financial data and AI advisor.
+              </p>
+            ) : (
+              <div className="bg-warning-500/10 border border-warning-500/20 rounded-xl p-3 text-xs text-warning-300">
+                <p className="font-bold mb-1">💡 Want separate records for different people?</p>
+                <p className="text-white/70 text-[11px] mb-2 leading-relaxed">
+                  FinCraft has full multi-user support! Each user can sign up with their own email. Their expenses, bank balances, debts, and AI keys are completely isolated from yours.
+                </p>
+                <a href="/auth" className="inline-flex items-center gap-1 font-bold text-brand-300 hover:underline">
+                  Create / Sign In to your account →
+                </a>
+              </div>
+            )}
           </div>
-          {!user && (
-            <a href="/auth" className="btn-primary text-xs px-4 py-2 shrink-0">Sign In</a>
-          )}
         </div>
 
         {/* ─── GEMINI AI CONFIGURATION ─── */}
@@ -103,19 +138,23 @@ export default function SettingsPage() {
           </div>
 
           {/* Info box */}
-          <div className="px-4 py-3 bg-brand-600/5 border-b border-white/5">
-            <p className="text-xs text-white/60 leading-relaxed">
-              Get a <strong className="text-brand-300">free API key</strong> from Google AI Studio using your Gmail account.
-              Free tier: <strong className="text-white">15 req/min · 1M tokens/day</strong> — enough for daily use.
+          <div className="px-4 py-3.5 bg-brand-600/10 border-b border-white/5 space-y-2">
+            <p className="text-xs text-white/70 leading-relaxed">
+              💡 <strong>Have Gemini Pro in your Gmail?</strong> Consumer subscriptions (like Google One / Gemini Advanced) don't automatically connect to third-party web apps. You just need to generate a <strong className="text-brand-300">free API key</strong> using that same Gmail account!
+            </p>
+            <p className="text-[11px] text-white/50 leading-relaxed">
+              1. Click the link below to open Google AI Studio.<br/>
+              2. Click <strong>"Create API key"</strong>.<br/>
+              3. Copy the key (starts with <code className="text-brand-300">AIzaSy...</code>) and paste it below.
             </p>
             <a
               href="https://aistudio.google.com/app/apikey"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 mt-2 text-xs text-brand-400 font-semibold hover:text-brand-300 transition-colors"
+              className="inline-flex items-center gap-1.5 pt-1 text-xs text-brand-300 font-bold hover:text-brand-200 transition-colors"
             >
-              <ExternalLink size={11} />
-              Open Google AI Studio → Get API Key
+              <ExternalLink size={12} />
+              Open Google AI Studio → Get Your API Key (Free)
             </a>
           </div>
 

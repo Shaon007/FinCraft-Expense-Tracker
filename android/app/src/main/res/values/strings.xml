@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">FinCraft</string>
+    <string name="title_activity_main">FinCraft</string>
+    <string name="package_name">com.fincraft.expense</string>
+    <string name="custom_url_scheme">com.fincraft.expense</string>
+</resources>

@@ -5,13 +5,13 @@ import { useFinance } from '@/context/FinanceContext'
 import { formatCurrency } from '@/lib/currency'
 
 const NAV_ITEMS = [
-  { to: '/',          icon: LayoutDashboard, label: 'Dashboard'   },
-  { to: '/expenses',  icon: CreditCard,      label: 'Expenses'    },
-  { to: '/debts',     icon: Wallet,          label: 'Debts'       },
-  { to: '/deposits',  icon: Landmark,        label: 'Savings'     },
-  { to: '/transfers', icon: ArrowRightLeft,  label: 'Transfers'   },
-  { to: '/advisor',   icon: BrainCircuit,    label: 'AI Advisor'  },
-  { to: '/settings',  icon: Settings,        label: 'Settings'    },
+  { to: '/',          icon: LayoutDashboard, label: 'Dashboard'      },
+  { to: '/expenses',  icon: CreditCard,      label: 'Expenses'       },
+  { to: '/deposits',  icon: Landmark,        label: 'Accounts & DPS' },
+  { to: '/debts',     icon: Wallet,          label: 'Loans & Debts'  },
+  { to: '/transfers', icon: ArrowRightLeft,  label: 'Transfers'      },
+  { to: '/advisor',   icon: BrainCircuit,    label: 'AI Advisor'     },
+  { to: '/settings',  icon: Settings,        label: 'Settings'       },
 ]
 
 export default function Sidebar() {
@@ -87,7 +87,7 @@ export default function Sidebar() {
             <p className="text-sm font-semibold text-white truncate leading-snug">{displayName}</p>
             <p className="text-[10px] text-white/40 truncate">{isDemoMode ? 'Demo Mode' : (user?.email || 'Guest')}</p>
           </div>
-          {user && (
+          {user ? (
             <button
               onClick={() => signOut()}
               title="Sign out"
@@ -95,6 +95,13 @@ export default function Sidebar() {
                          hover:bg-danger-500/20 transition-colors shrink-0"
             >
               <LogOut size={13} />
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate('/auth')}
+              className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-brand-gradient text-white shadow-glow hover:opacity-90 transition-opacity shrink-0"
+            >
+              Sign In
             </button>
           )}
         </div>

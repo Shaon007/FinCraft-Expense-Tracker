@@ -1,6 +1,7 @@
 import Header from '@/components/common/Header'
 import AdvisorSheet from '@/components/ai/AdvisorSheet'
 import { useFinance } from '@/context/FinanceContext'
+import { useAuth } from '@/context/AuthContext'
 import { formatCurrency } from '@/lib/currency'
 import { BrainCircuit, TrendingUp, TrendingDown, Wallet, Landmark } from 'lucide-react'
 import { getActiveApiKey } from '@/lib/gemini'
@@ -17,8 +18,9 @@ function StatPill({ label, value, color = 'text-white' }) {
 
 export default function AdvisorPage() {
   const { metrics, currency } = useFinance()
+  const { user } = useAuth()
   const navigate = useNavigate()
-  const hasApiKey = !!getActiveApiKey()
+  const hasApiKey = !!getActiveApiKey(user?.id)
 
   return (
     <div className="flex flex-col lg:flex-row min-h-full">

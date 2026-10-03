@@ -1,24 +1,50 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useFinance } from '@/context/FinanceContext'
 import { useSearchParams } from 'react-router-dom'
 import { X, DollarSign, Calendar, Tag, FileText } from 'lucide-react'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
+import { sanitizeCategoryIcon } from '@/lib/categories'
 
 export default function AddExpenseSheet({ onClose, defaultType = 'expense' }) {
   const { addTransaction, categories } = useFinance()
   const [searchParams] = useSearchParams()
   const typeFromUrl = searchParams.get('type') || defaultType
 
-  const [form, setForm] = useState({
-    type: typeFromUrl,
-    amount: '',
-    category_id: categories[0]?.id || '',
-    description: '',
-    note: '',
-    date: format(new Date(), 'yyyy-MM-dd'),
+  // Filter categories by type
+  const isIncomeCat = (c) => {
+    const n = (c.name || '').toLowerCase()
+    return c.type === 'income' || n.includes('salary') || n.includes('income') || n.includes('freelance') || n.includes('business') || n.includes('invest') || n.includes('bonus')
+  }
+
+  const [form, setForm] = useState(() => {
+    const initialType = typeFromUrl
+    const matchingCats = categories.filter(c => initialType === 'income' ? isIncomeCat(c) : !isIncomeCat(c))
+    return {
+      type: initialType,
+      amount: '',
+      category_id: (matchingCats[0] || categories[0])?.id || '',
+      description: '',
+      note: '',
+      date: format(new Date(), 'yyyy-MM-dd'),
+    }
   })
   const [loading, setLoading] = useState(false)
+
+  const relevantCategories = useMemo(() => {
+    const filtered = categories.filter(c => form.type === 'income' ? isIncomeCat(c) : !isIncomeCat(c))
+    return filtered.length > 0 ? filtered : categories
+  }, [categories, form.type])
+
+  const handleTypeChange = (newType) => {
+    const nextCats = categories.filter(c => newType === 'income' ? isIncomeCat(c) : !isIncomeCat(c))
+    setForm(prev => ({
+      ...prev,
+      type: newType,
+      category_id: (nextCats[0] || categories[0])?.id || '',
+      description: '',
+    }))
+  }
 
   const update = (field, value) => setForm(prev => ({ ...prev, [field]: value }))
 
@@ -63,7 +89,7 @@ export default function AddExpenseSheet({ onClose, defaultType = 'expense' }) {
             <button
               key={t}
               type="button"
-              onClick={() => update('type', t)}
+              onClick={() => handleTypeChange(t)}
               className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all duration-200 capitalize ${
                 form.type === t
                   ? t === 'expense'
@@ -80,7 +106,7 @@ export default function AddExpenseSheet({ onClose, defaultType = 'expense' }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Amount */}
           <div>
-            <label className="label-text">Amount</label>
+            <label className="label-text">Amount (৳)</label>
             <div className="relative">
               <DollarSign size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
               <input
@@ -100,25 +126,67 @@ export default function AddExpenseSheet({ onClose, defaultType = 'expense' }) {
 
           {/* Category */}
           <div>
-            <label className="label-text">Category</label>
-            <div className="grid grid-cols-4 gap-2">
-              {categories.slice(0, 8).map(cat => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => update('category_id', cat.id)}
-                  className={`flex flex-col items-center gap-1.5 p-2.5 rounded-xl border transition-all duration-150 ${
-                    form.category_id === cat.id
-                      ? 'border-brand-500 bg-brand-500/15'
-                      : 'border-white/10 bg-surface-700 hover:border-white/20'
-                  }`}
-                >
-                  <span className="text-xl">{cat.icon}</span>
-                  <span className="text-[9px] text-white/60 text-center leading-tight truncate w-full">{cat.name.split(' ')[0]}</span>
-                </button>
-              ))}
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="label-text mb-0">Select Category</label>
+              <span className="text-[11px] text-white/40">
+                {form.type === 'income' ? 'Income Categories' : 'Expense Categories'}
+              </span>
+            </div>
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto pr-1 scrollbar-hide py-1">
+              {relevantCategories.map(cat => {
+                const icon = sanitizeCategoryIcon(cat.name, cat.icon)
+                const isSelected = form.category_id === cat.id
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => update('category_id', cat.id)}
+                    className={`flex flex-col items-center justify-center text-center p-2 rounded-xl border transition-all duration-150 ${
+                      isSelected
+                        ? form.type === 'income'
+                          ? 'border-success-500 bg-success-500/20 text-white shadow-sm ring-1 ring-success-500'
+                          : 'border-brand-500 bg-brand-500/20 text-white shadow-sm ring-1 ring-brand-500'
+                        : 'border-white/10 bg-surface-700/80 text-white/70 hover:border-white/20 hover:text-white'
+                    }`}
+                  >
+                    <span className="text-2xl mb-1 select-none">{icon}</span>
+                    <span className="text-[11px] font-medium leading-tight truncate w-full px-1">
+                      {cat.name}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
           </div>
+
+          {/* Quick descriptions for income */}
+          {form.type === 'income' && (
+            <div>
+              <p className="text-[11px] text-white/40 mb-1.5">Quick Presets</p>
+              <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1">
+                {['Monthly Salary', 'Freelance Project', 'Business Profit', 'Bonus', 'Dividend'].map(txt => (
+                  <button
+                    key={txt}
+                    type="button"
+                    onClick={() => {
+                      update('description', txt)
+                      const matched = categories.find(c =>
+                        (c.name || '').toLowerCase().includes(txt.toLowerCase().split(' ')[0])
+                      )
+                      if (matched) update('category_id', matched.id)
+                    }}
+                    className={`px-2.5 py-1 text-xs rounded-lg shrink-0 border transition-all ${
+                      form.description === txt
+                        ? 'bg-success-500/20 border-success-400 text-white font-semibold'
+                        : 'bg-surface-700 border-white/10 text-white/60 hover:text-white'
+                    }`}
+                  >
+                    {txt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Description */}
           <div>
@@ -128,7 +196,7 @@ export default function AddExpenseSheet({ onClose, defaultType = 'expense' }) {
               <input
                 id="input-description"
                 type="text"
-                placeholder="What was this for?"
+                placeholder={form.type === 'income' ? 'e.g. Monthly Salary' : 'What was this for?'}
                 value={form.description}
                 onChange={e => update('description', e.target.value)}
                 className="input-field pl-9"

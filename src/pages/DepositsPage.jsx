@@ -20,6 +20,7 @@ function generateGrowthData(totalSavings, avgRate) {
 export default function DepositsPage() {
   const { deposits, metrics, currency } = useFinance()
   const [showAdd, setShowAdd] = useState(false)
+  const [addType, setAddType] = useState('savings')
   const [showTransfer, setShowTransfer] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -28,8 +29,17 @@ export default function DepositsPage() {
     : 4.5
   const growthData = generateGrowthData(metrics.totalSavings || 10000, avgRate)
 
+  const handleOpenAdd = (type = 'savings') => {
+    setAddType(type)
+    setShowAdd(true)
+  }
+
   useEffect(() => {
-    if (searchParams.get('add') === 'true') setShowAdd(true)
+    if (searchParams.get('add') === 'true') {
+      const type = searchParams.get('type') || 'savings'
+      setAddType(type)
+      setShowAdd(true)
+    }
   }, [searchParams])
 
   return (
@@ -40,7 +50,7 @@ export default function DepositsPage() {
       <div className="hidden lg:grid lg:grid-cols-[1fr_360px] gap-6 px-6 py-5 flex-1">
         {/* Left: Account list */}
         <div className="space-y-4">
-          <BankDepositList />
+          <BankDepositList onOpenAdd={handleOpenAdd} />
         </div>
 
         {/* Right: Stats panel */}
@@ -133,7 +143,7 @@ export default function DepositsPage() {
             </div>
           </div>
         )}
-        <BankDepositList />
+        <BankDepositList onOpenAdd={handleOpenAdd} />
       </div>
 
       {/* FABs (mobile) */}
@@ -149,14 +159,14 @@ export default function DepositsPage() {
         </button>
         <button
           id="btn-add-deposit"
-          onClick={() => setShowAdd(true)}
+          onClick={() => handleOpenAdd('mfs')}
           className="w-14 h-14 rounded-2xl bg-brand-gradient shadow-glow flex items-center justify-center active:scale-95 transition-all"
         >
           <Plus size={24} className="text-white" />
         </button>
       </div>
 
-      {showAdd && <AddDepositModal onClose={() => { setShowAdd(false); setSearchParams({}) }} />}
+      {showAdd && <AddDepositModal initialType={addType} onClose={() => { setShowAdd(false); setSearchParams({}) }} />}
       {showTransfer && <TransferModal onClose={() => setShowTransfer(false)} />}
     </div>
   )

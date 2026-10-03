@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { analyzeSpendingRisks } from '@/lib/gemini'
 import { useFinance } from '@/context/FinanceContext'
+import { useAuth } from '@/context/AuthContext'
 import { formatCurrency } from '@/lib/currency'
 import { AlertTriangle, Info, XCircle, Sparkles, ChevronDown, ChevronUp } from 'lucide-react'
 
@@ -18,6 +19,7 @@ const RISK_LABEL = {
 
 export default function SpendingRiskAlert() {
   const { metrics, currency } = useFinance()
+  const { user } = useAuth()
   const [analysis, setAnalysis] = useState(null)
   const [loading, setLoading] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -33,7 +35,7 @@ export default function SpendingRiskAlert() {
         savingsRate: metrics.savingsRate,
         topCategories: metrics.categoryBreakdown.slice(0, 5).map(c => ({ name: c.name, amount: c.spent })),
       }
-      const result = await analyzeSpendingRisks(data)
+      const result = await analyzeSpendingRisks(data, user?.id)
       setAnalysis(result)
       setRan(true)
     } catch (err) {

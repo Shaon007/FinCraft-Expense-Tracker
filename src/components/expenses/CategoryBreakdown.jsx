@@ -1,6 +1,7 @@
 import { useFinance } from '@/context/FinanceContext'
 import { formatCurrency, calcPercentage } from '@/lib/currency'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
+import { sanitizeCategoryIcon } from '@/lib/categories'
 
 export default function CategoryBreakdown() {
   const { metrics, currency } = useFinance()
@@ -62,14 +63,15 @@ export default function CategoryBreakdown() {
         <div className="flex-1 space-y-2.5">
           {top5.map(cat => {
             const pct = calcPercentage(cat.spent, totalExpense)
+            const icon = sanitizeCategoryIcon(cat.name, cat.icon)
             return (
               <div key={cat.id}>
                 <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm">{cat.icon}</span>
-                    <span className="text-xs text-white/70 truncate max-w-[80px]">{cat.name.split(' ')[0]}</span>
+                  <div className="flex items-center gap-1.5 min-w-0 pr-2">
+                    <span className="text-sm shrink-0">{icon}</span>
+                    <span className="text-xs text-white/80 truncate font-medium">{cat.name}</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     <span className="text-xs text-white/50">{pct}%</span>
                     <span className="text-xs font-bold text-white">{formatCurrency(cat.spent, currency, true)}</span>
                   </div>

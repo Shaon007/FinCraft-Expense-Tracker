@@ -17,10 +17,10 @@ export default function Header({ title, subtitle, showActions = true }) {
 
   return (
     <header
-      className="sticky top-0 z-20 bg-surface-900/80 backdrop-blur-xl border-b border-white/5"
+      className="sticky top-0 z-20 bg-surface-900/80 backdrop-blur-xl border-b border-white/5 w-full max-w-full"
       style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
     >
-      <div className="max-w-full mx-auto px-4 lg:px-6 pb-3 flex items-center gap-3">
+      <div className="w-full max-w-full mx-auto px-3.5 sm:px-4 lg:px-6 pb-3 flex items-center justify-between gap-2.5">
         {/* Back button (when not home and on mobile) */}
         {!isHome && (
           <button
@@ -53,7 +53,15 @@ export default function Header({ title, subtitle, showActions = true }) {
         )}
 
         {showActions && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
+            {!user && (
+              <button
+                onClick={() => navigate('/auth')}
+                className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-brand-gradient text-white shadow-glow"
+              >
+                Sign In / Register
+              </button>
+            )}
             <button
               id="btn-notifications"
               className="w-9 h-9 rounded-xl bg-surface-700 flex items-center justify-center

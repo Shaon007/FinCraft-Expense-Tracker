@@ -4,6 +4,7 @@ import { formatCurrency } from '@/lib/currency'
 import { format } from 'date-fns'
 import { Trash2, TrendingUp, TrendingDown, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { sanitizeCategoryIcon } from '@/lib/categories'
 
 export default function TransactionList() {
   const { transactions, deleteTransaction, currency } = useFinance()
@@ -68,13 +69,14 @@ export default function TransactionList() {
             {filtered.map(tx => {
               const isIncome = tx.type === 'income'
               const cat = tx.category || { name: 'Other', icon: '📦', color: '#6B7280' }
+              const icon = sanitizeCategoryIcon(cat.name, cat.icon)
               return (
                 <div key={tx.id} className="flex items-center gap-3 px-4 py-3.5 group hover:bg-white/[0.02] transition-colors">
                   <div
                     className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0"
                     style={{ backgroundColor: `${cat.color}20` }}
                   >
-                    {cat.icon}
+                    {icon}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-white truncate">{tx.description || cat.name}</p>

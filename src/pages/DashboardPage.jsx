@@ -1,6 +1,11 @@
 import { useState } from 'react'
 import Header from '@/components/common/Header'
 import BalanceSummary from '@/components/dashboard/BalanceSummary'
+import AccountsQuickRow from '@/components/dashboard/AccountsQuickRow'
+import DpsQuickCard from '@/components/dashboard/DpsQuickCard'
+import AllBalancesModal from '@/components/dashboard/AllBalancesModal'
+import AddDepositModal from '@/components/deposits/AddDepositModal'
+import DebtItemCard from '@/components/debt/DebtItemCard'
 import CurrencyTicker from '@/components/dashboard/CurrencyTicker'
 import RecentTransactions from '@/components/dashboard/RecentTransactions'
 import MetricCard from '@/components/common/MetricCard'
@@ -9,32 +14,58 @@ import CategoryBreakdown from '@/components/expenses/CategoryBreakdown'
 import QuickActionModal from '@/components/common/QuickActionModal'
 import { useFinance } from '@/context/FinanceContext'
 import { formatCurrency } from '@/lib/currency'
-import { Plus, Landmark, CreditCard, ArrowRightLeft, TrendingUp } from 'lucide-react'
+import { Plus, Landmark, CreditCard, ArrowRightLeft, TrendingUp, Smartphone, Target } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 export default function DashboardPage() {
   const { metrics, currency, transfers } = useFinance()
   const [showQuickActions, setShowQuickActions] = useState(false)
+  const [showAllBalances, setShowAllBalances] = useState(false)
+  const [showAddDeposit, setShowAddDeposit] = useState(false)
+  const [addDepositType, setAddDepositType] = useState('mfs')
+  const [showAddDebt, setShowAddDebt] = useState(false)
+
   const navigate = useNavigate()
 
+  const handleOpenAddAccount = (type = 'mfs') => {
+    setAddDepositType(type)
+    setShowAddDeposit(true)
+  }
+
   return (
-    <div className="flex flex-col min-h-full">
+    <div className="flex flex-col min-h-full w-full">
       <Header />
 
       {/* ─── Desktop: Two-column grid ──────────────────────────── */}
-      <div className="flex-1 hidden lg:grid lg:grid-cols-[1fr_380px] xl:grid-cols-[1fr_420px] gap-6 px-6 py-5">
+      <div className="flex-1 hidden lg:grid lg:grid-cols-[1fr_380px] xl:grid-cols-[1fr_420px] gap-6 px-6 py-5 max-w-full">
         {/* Left column */}
         <div className="space-y-5 min-w-0">
-          <BalanceSummary />
+          <BalanceSummary onOpenAllBalances={() => setShowAllBalances(true)} />
+
+          {/* Accounts & Wallets Quick Row */}
+          <AccountsQuickRow
+            onOpenAdd={handleOpenAddAccount}
+            onOpenAllBalances={() => setShowAllBalances(true)}
+          />
+
+          {/* Monthly DPS Schemes Card */}
+          <DpsQuickCard onOpenAddDps={() => handleOpenAddAccount('dps')} />
 
           {/* Metric row */}
           <div className="grid grid-cols-3 gap-4">
             <MetricCard
-              label="Total Savings"
+              label="Liquid Funds"
+              value={formatCurrency(metrics.currentBalance, currency, true)}
+              icon={Smartphone}
+              gradient="from-pink-600 to-rose-700"
+              subValue="Bank + MFS"
+            />
+            <MetricCard
+              label="Total Savings & DPS"
               value={formatCurrency(metrics.totalSavings, currency, true)}
-              icon={Landmark}
-              gradient="from-brand-600 to-indigo-600"
-              subValue="All accounts"
+              icon={Target}
+              gradient="from-cyan-600 to-blue-700"
+              subValue="Accumulated"
             />
             <MetricCard
               label="Active Debt"
@@ -42,13 +73,6 @@ export default function DashboardPage() {
               icon={CreditCard}
               gradient="from-danger-600 to-red-700"
               subValue="Remaining"
-            />
-            <MetricCard
-              label="Net Cash"
-              value={formatCurrency(metrics.netCash, currency, true)}
-              icon={TrendingUp}
-              gradient="from-success-600 to-emerald-700"
-              subValue="This month"
             />
           </div>
 
@@ -83,7 +107,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Right column */}
-        <div className="space-y-5">
+        <div className="space-y-5 min-w-0">
           <CurrencyTicker />
           <SpendingRiskAlert />
           <RecentTransactions limit={8} />
@@ -91,13 +115,37 @@ export default function DashboardPage() {
       </div>
 
       {/* ─── Mobile: Single column ────────────────────────────── */}
-      <div className="page-container flex-1 pt-4 lg:hidden space-y-4">
-        <BalanceSummary />
+      <div className="page-container flex-1 pt-3 lg:hidden space-y-4 w-full">
+        <BalanceSummary onOpenAllBalances={() => setShowAllBalances(true)} />
+
+        {/* Mobile Accounts & Wallets row */}
+        <AccountsQuickRow
+          onOpenAdd={handleOpenAddAccount}
+          onOpenAllBalances={() => setShowAllBalances(true)}
+        />
+
+        {/* Monthly DPS Card */}
+        <DpsQuickCard onOpenAddDps={() => handleOpenAddAccount('dps')} />
+
         <CurrencyTicker />
+
         <div className="grid grid-cols-2 gap-3">
-          <MetricCard label="Total Savings" value={formatCurrency(metrics.totalSavings, currency, true)} icon={Landmark} gradient="from-brand-600 to-indigo-600" subValue="All accounts" />
-          <MetricCard label="Active Debt"   value={formatCurrency(metrics.totalOwed, currency, true)}    icon={CreditCard} gradient="from-danger-600 to-red-700"   subValue="Remaining" />
+          <MetricCard
+            label="Liquid Cash"
+            value={formatCurrency(metrics.currentBalance, currency, true)}
+            icon={Smartphone}
+            gradient="from-pink-600 to-rose-700"
+            subValue="Banks + MFS"
+          />
+          <MetricCard
+            label="Active Debt"
+            value={formatCurrency(metrics.totalOwed, currency, true)}
+            icon={CreditCard}
+            gradient="from-danger-600 to-red-700"
+            subValue="Remaining"
+          />
         </div>
+
         <SpendingRiskAlert />
         <RecentTransactions limit={5} />
       </div>
@@ -113,7 +161,34 @@ export default function DashboardPage() {
         <Plus size={24} className="text-white" />
       </button>
 
-      {showQuickActions && <QuickActionModal onClose={() => setShowQuickActions(false)} />}
+      {/* Modals */}
+      {showQuickActions && (
+        <QuickActionModal
+          onClose={() => setShowQuickActions(false)}
+          onAddAccount={handleOpenAddAccount}
+        />
+      )}
+
+      {showAllBalances && (
+        <AllBalancesModal
+          onClose={() => setShowAllBalances(false)}
+          onOpenAddAccount={handleOpenAddAccount}
+          onOpenAddDebt={() => setShowAddDebt(true)}
+        />
+      )}
+
+      {showAddDeposit && (
+        <AddDepositModal
+          initialType={addDepositType}
+          onClose={() => setShowAddDeposit(false)}
+        />
+      )}
+
+      {showAddDebt && (
+        <DebtItemCard
+          onClose={() => setShowAddDebt(false)}
+        />
+      )}
     </div>
   )
 }
